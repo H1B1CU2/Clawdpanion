@@ -1,119 +1,119 @@
 # Clawdpanion
 
-A beautifully crafted macOS menubar companion for **Claude Code**.
+Clawdpanion is a macOS menu bar companion for **Claude Code**. It presents **Claw'd**, a pixel-art mascot that reflects the current state of your Claude Code sessions directly within the system menu bar.
 
-Clawdpanion shows **Claw'd**, an orange pixel-art mascot in your menu bar, who reacts dynamically to your Claude Code activities:
-- **Idle**: Sits quietly, blinking occasionally so he feels alive.
-- **Coding**: Plays a looping typing animation while a Claude Code session is active.
-- **Attention**: Waves a hand when a session is waiting for your input.
-- **Done**: Celebrates with a two-handed triumph dance when a task finishes.
+## Overview
 
-Additionally, Clawdpanion lists all your live Claude Code sessions in its dropdown menu and lets you focus a session's specific Terminal tab with a single click.
+Claw'd communicates session activity through a small set of distinct states:
 
----
+- **Idle** — Remains at rest, with an occasional blink.
+- **Coding** — Displays a looping typing animation while a Claude Code session is active.
+- **Attention** — Raises a hand when a session is awaiting your input.
+- **Done** — Briefly indicates completion when a task finishes.
 
-## Key Features
-
-- **Dynamic Animations**: Procedurally generated pixel-art animations representing different task states (Idle, Coding, Attention, and Done/Celebration).
-- **Idle Blinking**: Subtly blinks every few seconds while resting to look natural and alive.
-- **Single vs. Per-Session Mode**: 
-  - **Single Mascot**: A single Claw'd shows the aggregate state across all sessions.
-  - **Per-Session Mascot**: Shows one Claw'd in the menubar for each active Claude session.
-- **Interactive Focusing**: Left-clicking a session's mascot immediately focuses its corresponding Terminal.app tab using AppleScript.
-- **Monotone Support**: A toggle to switch between the classic orange Claw'd and a macOS native Monotone theme (using template icons that adapt to light/dark menubars).
-- **Process Scanner**: Under the hood, a Python script scans for running `claude` processes, ensuring Clawdpanion reflects actual live terminal instances.
+In addition, Clawdpanion enumerates all active Claude Code sessions in its menu and allows you to bring a session's Terminal tab to the foreground with a single action.
 
 ---
 
-## Directory & Codebase Structure
+## Features
+
+- **State-driven animations** — Procedurally generated pixel-art frames represent each session state (Idle, Coding, Attention, and Done).
+- **Idle animation** — A periodic blink while at rest provides a subtle sense of activity.
+- **Single and per-session modes**
+  - *Single*: A single mascot represents the aggregate state across all sessions.
+  - *Per-session*: A dedicated mascot is displayed for each active session.
+- **Terminal focus** — A left-click on a session's mascot brings the corresponding Terminal.app tab to the foreground via AppleScript; a right-click (or Control-click) opens the menu.
+- **Monochrome theme** — A toggle switches between the standard orange mascot and a monochrome template theme that adapts to light and dark menu bars.
+- **Session discovery** — A Python helper scans for running `claude` processes so that the displayed state corresponds to live terminal sessions.
+
+---
+
+## Project Structure
 
 ```
 .
 ├── Clawdpanion/
-│   ├── main.swift         # AppKit menubar application logic & UI
-│   ├── gen_frames.py      # Python script to procedurally render pixel-art frames
+│   ├── main.swift         # AppKit menu bar application logic and UI
+│   ├── gen_frames.py      # Procedurally renders the pixel-art frames
 │   ├── Frames/            # Pre-generated color and monochrome frame PNGs
-│   └── Info.plist         # macOS App configuration
+│   └── Info.plist         # macOS application configuration
 ├── Scripts/
-│   ├── list_sessions.py   # Scans for running Claude processes and JSON metadata
-│   ├── record.sh          # Hook wrapper to write/clear session marker files
-│   ├── notify.sh          # Hook wrapper to trigger attention waves and system alerts
-│   └── focus.scpt         # AppleScript to focus a Terminal.app tab by its TTY
+│   ├── list_sessions.py   # Discovers running Claude processes and JSON metadata
+│   ├── record.sh          # Hook wrapper that writes and clears session markers
+│   ├── notify.sh          # Hook wrapper for attention waves and system alerts
+│   └── focus.scpt         # AppleScript that focuses a Terminal.app tab by its TTY
 ├── Clawdpanion.xcodeproj  # Xcode project files
-├── install.sh             # End-to-end installer script
+├── install.sh             # End-to-end installer
 └── README.md              # Project documentation
 ```
 
 ---
 
-## Installation & Setup
+## Installation
 
-Clawdpanion has a self-contained installer script that sets up everything end-to-end.
+Clawdpanion provides a self-contained installer that configures the application end to end.
 
 ```sh
 ./install.sh
 ```
 
-### What the installer does:
-1. Installs the helper scripts to `~/.claude/claw-mascot/`.
-2. Builds the `Clawdpanion.app` binary and places it in your `~/Applications/` directory.
-3. Installs and loads a LaunchAgent plist so the application automatically starts when you log in.
-4. Idempotently merges the necessary Claude Code hooks into your `~/.claude/settings.json` file (saving a backup to `.bak` first).
+The installer performs the following steps:
 
-*Note: After installing, run `/hooks` in any active Claude Code session to ensure it begins reporting activity.*
+1. Installs the helper scripts to `~/.claude/claw-mascot/`.
+2. Builds `Clawdpanion.app` and installs it to `~/Applications/`.
+3. Installs and loads a LaunchAgent so that the application starts automatically at login.
+4. Idempotently merges the required Claude Code hooks into `~/.claude/settings.json`, retaining a backup at `~/.claude/settings.json.bak`.
+
+After installation, run `/hooks` in any active Claude Code session to reload the configuration so that the session begins reporting activity.
 
 ### Requirements
-- **macOS** with a **full Xcode installation** (not just Command Line Tools) — required only for building the Swift binary.
-- Python 3 (comes pre-bundled with Xcode/macOS developer tools).
-- No Homebrew, `jq`, or Pillow dependencies are needed to install and run the app.
+
+- **macOS** with a **full Xcode installation** (not Command Line Tools alone); required only to build the Swift binary.
+- **Python 3**, which is included with the Xcode and macOS developer tools.
+- No Homebrew, `jq`, or Pillow dependencies are required to install and run the application.
 
 ---
 
-## How it works: State & Claude Code Hooks
+## State Model and Claude Code Hooks
 
-Clawdpanion's state transitions are driven by standard Claude Code hooks configured in `~/.claude/settings.json`:
+Clawdpanion's state transitions are driven by Claude Code hooks defined in `~/.claude/settings.json`. Each hook writes or clears marker files beneath `~/.claude/claw-mascot/`, which the application polls.
 
-- **`UserPromptSubmit`** runs `record.sh coding`:
-  - Touches an active marker file in `~/.claude/claw-mascot/active/`.
-  - Clears attention and done markers.
-  - Instructs Claw'd to start typing.
-- **`Stop`** runs `record.sh idle` and `notify.sh done`:
-  - Clears the active and attention markers.
-  - Touches a done marker in `~/.claude/claw-mascot/done/` to trigger a brief celebration animation.
-- **`Notification`** runs `notify.sh attention`:
-  - Touches a marker in `~/.claude/claw-mascot/attention/`.
-  - Instructs Claw'd to wave for attention (only while the session is actually mid-task).
+- **`UserPromptSubmit`** runs `record.sh coding`: creates an active marker, clears the attention and done markers, and initiates the typing animation.
+- **`PostToolUse`** runs `record.sh resume`: refreshes the active marker and clears the attention marker whenever a tool executes. This ensures the raised hand is lowered as soon as a session resumes — for example, after a mid-task permission prompt is approved.
+- **`Notification`** runs `notify.sh attention`: creates an attention marker so that Claw'd signals for input, but only while the session is genuinely mid-task.
+- **`Stop`** runs `record.sh idle` and `notify.sh done`: clears the active and attention markers and creates a done marker to trigger a brief completion animation.
 
-The main Swift application polls these directories every `0.4` seconds to update the mascot animations accordingly.
+The application polls these directories approximately every 0.4 seconds and updates the mascot accordingly.
 
 ---
 
-## Customizing and Regenerating Claw'd Art
+## Regenerating Claw'd's Artwork
 
-All frames are pre-generated PNGs stored in `Clawdpanion/Frames/`. If you want to customize the look of Claw'd, edit `Clawdpanion/gen_frames.py` and run it to regenerate the asset frames.
+All frames are pre-generated PNGs stored in `Clawdpanion/Frames/`. To modify the mascot's appearance, edit `Clawdpanion/gen_frames.py` and regenerate the assets.
 
 Regeneration requires the **Pillow** library:
 
 ```sh
 pip3 install Pillow
 python3 Clawdpanion/gen_frames.py Clawdpanion/Frames
-xattr -cr Clawdpanion/Frames   # Strips extended attributes so codesign doesn't break
+xattr -cr Clawdpanion/Frames   # Removes extended attributes that can interfere with code signing
 ```
 
-The script generates:
+The script produces:
+
 - Standard color frames (orange body, black eyes).
-- Monotone frames (`mono_` prefix) where the body is solid grey/black and eyes are transparent holes, making them suitable as macOS template images.
-- Retina-resolution versions (`@2x.png` suffixes) for high-DPI displays.
+- Monochrome frames (`mono_` prefix), in which the body is a solid grey or black and the eyes are transparent, suitable for use as macOS template images.
+- Retina-resolution variants (`@2x.png` suffix) for high-DPI displays.
 
 ---
 
-## Manual Building
+## Building Manually
 
-To build the project from the command line without using the installer script:
+To build the project from the command line without the installer:
 
 ```sh
 xcodebuild -project Clawdpanion.xcodeproj -scheme Clawdpanion \
   -configuration Release -derivedDataPath /tmp/clawd_dd build
 ```
 
-*Note: Building to a temporary directory outside the repository folder is recommended if your workspace lives in a cloud-synced directory (like iCloud Drive), as extended syncing attributes can interfere with code-signing.*
+Building to a temporary directory outside the repository is recommended when the workspace resides in a cloud-synced location (such as iCloud Drive), as synchronization attributes can interfere with code signing.
