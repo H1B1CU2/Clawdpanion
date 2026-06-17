@@ -14,7 +14,7 @@ Additionally, Clawdpanion lists all your live Claude Code sessions in its dropdo
 
 ## Key Features
 
-- **Dynamic Animations**: Hand-crafted pixel-art animations representing different task states (Idle, Coding, Attention, and Done/Celebration).
+- **Dynamic Animations**: Procedurally generated pixel-art animations representing different task states (Idle, Coding, Attention, and Done/Celebration).
 - **Idle Blinking**: Subtly blinks every few seconds while resting to look natural and alive.
 - **Single vs. Per-Session Mode**: 
   - **Single Mascot**: A single Claw'd shows the aggregate state across all sessions.
