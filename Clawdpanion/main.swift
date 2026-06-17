@@ -58,10 +58,8 @@ final class Mascot {
     var doneActiveAt: Date? = nil   // when the transient "done" pose started
     var nextBlinkAt: Date = .distantFuture  // when the next idle blink should start
     var blinkTicks = 0              // >0 while the idle blink (closed eyes) is showing
-    // Each mascot owns its menu so the delegate can map an open menu back to the
-    // right session. It is NOT permanently attached to the status item — the
-    // button's action handles clicks (see statusButtonClicked) and only attaches
-    // the menu for the moment it needs to pop, so left-clicks still reach us.
+    // Each mascot owns its menu, attached to its status item so macOS opens it
+    // natively on any click. The delegate rebuilds it fresh each time it opens.
     let menu = NSMenu()
 
     func dispose() { NSStatusBar.system.removeStatusItem(statusItem) }
@@ -174,14 +172,12 @@ final class MascotController: NSObject, NSMenuDelegate {
         let m = Mascot()
         m.sid = sid
         m.menu.delegate = self           // rebuilt fresh each time it opens
-        // Handle clicks via the button's action rather than a permanently
-        // attached menu, so we can tell left from right. By default a status
-        // button only fires its action on left-up, so opt into right-up too.
-        // statusButtonClicked then jumps (left) or pops the menu (right/ctrl).
+        // Attach the menu directly so macOS opens it natively on any click —
+        // left, right, or control-click. This is the most reliable behaviour;
+        // there is no custom click handling. To jump to a session's Terminal
+        // tab, click its row inside the menu (see sessionItem / focusSession).
+        m.statusItem.menu = m.menu
         if let b = m.statusItem.button {
-            b.target = self
-            b.action = #selector(statusButtonClicked(_:))
-            b.sendAction(on: [.leftMouseUp, .rightMouseUp])
             b.imageScaling = .scaleProportionallyUpOrDown
             if let sid = sid, let s = cachedSessions.first(where: { $0.id == sid }) {
                 b.toolTip = s.label
@@ -198,36 +194,6 @@ final class MascotController: NSObject, NSMenuDelegate {
     func scheduleNextBlink(_ m: Mascot) {
         m.blinkTicks = 0
         m.nextBlinkAt = Date().addingTimeInterval(.random(in: kIdleBlinkMin...kIdleBlinkMax))
-    }
-
-    // Single entry point for clicks on any of our status buttons. A plain
-    // left-click jumps to the session's Terminal tab; a right- or control-click
-    // (and a left-click with nothing to jump to) opens the menu instead.
-    @objc func statusButtonClicked(_ sender: NSStatusBarButton) {
-        guard let m = mascot(forButton: sender) else { return }
-        let e = NSApp.currentEvent
-        let wantsMenu = e?.type == .rightMouseUp
-            || (e?.modifierFlags.contains(.control) ?? false)
-        if !wantsMenu, let tty = focusTTY(for: m), !tty.isEmpty {
-            runFocus(tty)
-            return
-        }
-        popUpMenu(for: m)
-    }
-
-    // Pop the mascot's menu under its icon. We attach it only for the duration
-    // of the click — performClick opens it natively (correctly positioned and
-    // highlighting the button) and blocks until it closes — then detach so the
-    // next click reaches statusButtonClicked again.
-    func popUpMenu(for m: Mascot) {
-        m.statusItem.menu = m.menu
-        m.statusItem.button?.performClick(nil)
-        m.statusItem.menu = nil
-    }
-
-    // The mascot owning a given status button.
-    func mascot(forButton button: NSStatusBarButton) -> Mascot? {
-        mascots.first { $0.statusItem.button === button }
     }
 
     func disposeAllMascots() {
@@ -438,51 +404,9 @@ final class MascotController: NSObject, NSMenuDelegate {
 
     // MARK: - Clicks
 
-    // The Terminal tty this mascot's left-click should jump to: for a per-session
-    // mascot its own session; for the aggregate mascot the session that wants you
-    // (waving) or just finished (celebrating). nil => nothing to jump to.
-    func focusTTY(for m: Mascot) -> String? {
-        if let sid = m.sid { return ttyForSession(sid) }
-        return focusTargetTTY()
-    }
-
-    // tty of the session most in need of focus: a waving (attention) session
-    // first, then a celebrating (done) one. nil if neither has a focusable tab.
-    func focusTargetTTY() -> String? {
-        for dir in [kAttentionDir, kDoneDir] {
-            if let sid = liveMarkerSID(dir), let tty = ttyForSession(sid), !tty.isEmpty {
-                return tty
-            }
-        }
-        return nil
-    }
-
-    // Newest non-stale marker filename (= session id) in a marker dir, if any.
-    func liveMarkerSID(_ dir: String) -> String? {
-        let fm = FileManager.default
-        guard let items = try? fm.contentsOfDirectory(atPath: dir) else { return nil }
-        let now = Date()
-        var best: (sid: String, mtime: Date)? = nil
-        for name in items {
-            guard let attrs = try? fm.attributesOfItem(atPath: "\(dir)/\(name)"),
-                  let mtime = attrs[.modificationDate] as? Date else { continue }
-            if now.timeIntervalSince(mtime) > kStaleSeconds { continue }
-            if best == nil || mtime > best!.mtime { best = (name, mtime) }
-        }
-        return best?.sid
-    }
-
-    // tty for a session id — prefer the live scan, fall back to its session json.
-    func ttyForSession(_ sid: String) -> String? {
-        if let s = cachedSessions.first(where: { $0.id == sid }), !s.tty.isEmpty {
-            return s.tty
-        }
-        guard let data = FileManager.default.contents(atPath: "\(kSessionsDir)/\(sid).json"),
-              let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
-        else { return nil }
-        return obj["tty"] as? String
-    }
-
+    // Launch the AppleScript that brings a session's Terminal tab to the front.
+    // Used by the in-menu session rows (focusSession); clicking the menubar icon
+    // itself only opens the menu.
     func runFocus(_ tty: String) {
         guard !tty.isEmpty else { return }
         let p = Process()
@@ -494,8 +418,7 @@ final class MascotController: NSObject, NSMenuDelegate {
     // MARK: - Menu
 
     // Rebuild the menu every time it's about to open so the session list and
-    // statuses are current. A plain left-click is intercepted before this fires
-    // (installLeftClickJump), so reaching here means the menu really is opening.
+    // statuses are current. macOS calls this whenever the icon is clicked.
     func menuNeedsUpdate(_ menu: NSMenu) {
         menu.removeAllItems()
         scanSessions()   // refresh cache for next open
