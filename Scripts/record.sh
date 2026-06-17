@@ -14,6 +14,14 @@ attdir="$base/attention"
 donedir="$base/done"
 mkdir -p "$adir" "$sdir" "$attdir" "$donedir"
 
+# Usage modes:
+#   coding | idle  — full bookkeeping (see marker state machine below)
+#   resume         — Claude ran a tool, so it's actively working again; lower
+#                    any raised hand and keep the active marker fresh. Fires on
+#                    PostToolUse, which is the only signal that you answered a
+#                    mid-task permission prompt (no UserPromptSubmit / Stop runs
+#                    then). Kept deliberately light since it fires every tool.
+
 json="$(cat)"
 fields="$(printf '%s' "$json" | /usr/bin/python3 -c "import sys,json
 try: d=json.load(sys.stdin)
@@ -24,6 +32,14 @@ print(d.get('cwd','') or '')")"
 $fields
 EOF
 [ -z "$sid" ] && exit 0
+
+# Fast path: Claude resumed work — drop the raised hand, refresh active, and
+# skip the tty/session-json bookkeeping (already written by the coding hook).
+if [ "$status" = "resume" ]; then
+  touch "$adir/$sid"
+  rm -f "$attdir/$sid"
+  exit 0
+fi
 
 # The hook process itself usually has NO controlling terminal, so walk up the
 # parent chain (claude spawns the hook) to find the first ancestor that does.

@@ -89,12 +89,14 @@ if os.path.exists(path):
 hooks = data.setdefault("hooks", {})
 managed = [
     ("UserPromptSubmit", 'record.sh" coding'),
+    ("PostToolUse",      'record.sh" resume'),
     ("Stop",             'notify.sh" done'),
     ("Stop",             'record.sh" idle'),
     ("Notification",     'notify.sh" attention'),
 ]
 cmd_for = {
     'record.sh" coding':  'bash "$HOME/.claude/claw-mascot/record.sh" coding',
+    'record.sh" resume':  'bash "$HOME/.claude/claw-mascot/record.sh" resume',
     'notify.sh" done':    'bash "$HOME/.claude/claw-mascot/notify.sh" done',
     'record.sh" idle':    'bash "$HOME/.claude/claw-mascot/record.sh" idle',
     'notify.sh" attention':'bash "$HOME/.claude/claw-mascot/notify.sh" attention',
